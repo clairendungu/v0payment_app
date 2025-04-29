@@ -11,6 +11,7 @@ type SupabaseContext = {
   supabase: SupabaseClient<Database>
   user: any
   loading: boolean
+  initError: string | null
 }
 
 const Context = createContext<SupabaseContext | undefined>(undefined)
@@ -30,7 +31,19 @@ export function SupabaseProvider({ children }: { children: React.ReactNode }) {
   const [loading, setLoading] = useState(true)
   const { toast } = useToast()
 
+  // Add this after the useState for supabase
+  const [initError, setInitError] = useState<string | null>(null)
+
+  // Modify the useEffect to include better error handling
   useEffect(() => {
+    // Check if Supabase is properly initialized
+    if (!process.env.NEXT_PUBLIC_SUPABASE_URL || !process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY) {
+      console.error("Missing Supabase environment variables - authentication will fail")
+      setInitError("Supabase configuration is missing. Please check environment variables.")
+      setLoading(false)
+      return
+    }
+
     const {
       data: { subscription },
     } = supabase.auth.onAuthStateChange(async (event, session) => {
@@ -96,7 +109,12 @@ export function SupabaseProvider({ children }: { children: React.ReactNode }) {
     })
 
     // Initial session check
-    supabase.auth.getSession().then(({ data: { session } }) => {
+    supabase.auth.getSession().then(({ data: { session }, error }) => {
+      if (error) {
+        console.error("Error getting session:", error)
+        setInitError("Failed to initialize authentication. Please check your network connection and try again.")
+      }
+
       if (session) {
         setUser(session.user)
       }
@@ -108,7 +126,29 @@ export function SupabaseProvider({ children }: { children: React.ReactNode }) {
     }
   }, [supabase, toast])
 
-  return <Context.Provider value={{ supabase, user, loading }}>{children}</Context.Provider>
+  // Add this to the Context.Provider value
+  return (
+    <Context.Provider value={{ supabase, user, loading, initError }}>
+      {initError && (
+        <div className="fixed inset-0 flex items-center justify-center bg-background/80 z-50">
+          <div className="bg-card p-6 rounded-lg shadow-lg max-w-md">
+            <h2 className="text-xl font-bold text-destructive mb-4">Authentication Error</h2>
+            <p className="mb-4">{initError}</p>
+            <p className="text-sm text-muted-foreground mb-4">
+              This could be due to missing environment variables or network connectivity issues.
+            </p>
+            <button
+              className="bg-primary text-primary-foreground px-4 py-2 rounded"
+              onClick={() => window.location.reload()}
+            >
+              Retry
+            </button>
+          </div>
+        </div>
+      )}
+      {children}
+    </Context.Provider>
+  )
 }
 
 export const useSupabase = () => {

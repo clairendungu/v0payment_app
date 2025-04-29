@@ -11,5 +11,11 @@ export const createServerClient = () => {
     return createClient("https://example.com", "dummy-key")
   }
 
-  return createClient<Database>(supabaseUrl, supabaseKey)
+  try {
+    return createClient<Database>(supabaseUrl, supabaseKey)
+  } catch (error) {
+    console.error("Failed to create Supabase server client:", error)
+    // Return a dummy client that won't actually work - this will cause errors but prevent crashes
+    return createClient("https://example.com", "dummy-key")
+  }
 }
